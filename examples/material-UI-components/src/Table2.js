@@ -1,5 +1,4 @@
-import React from 'react'
-
+import React, { useCallback, useState } from 'react'
 import CssBaseline from '@material-ui/core/CssBaseline'
 import { lighten, makeStyles } from '@material-ui/core/styles';
 import MaUTable from '@material-ui/core/Table'
@@ -16,8 +15,9 @@ import Tooltip from '@material-ui/core/Tooltip';
 import Toolbar from '@material-ui/core/Toolbar';
 import IconButton from '@material-ui/core/IconButton';
 import Typography from '@material-ui/core/Typography';
+import XLSX from 'xlsx';
 
-import { useTable, useSortBy } from 'react-table'
+import { useTable, useSortBy, usePagination } from 'react-table'
 
 import makeData from './makeData';
 
@@ -31,33 +31,61 @@ const useToolbarStyles = makeStyles(theme => ({
   },
 }));
 
-function Table({ columns, data, loading, fetchData }) {
+const Table = ({ columns, data, loading, fetchData, title, controlledPageCount }) => {
   // Use the state and functions returned from useTable to build your UI
+
   const {
     getTableProps,
     getTableHeaderProps,
     headerGroups,
     rows,
     prepareRow,
+    page,
+    nextPage,
+    canPreviousPage,
+    canNextPage,
+    previousPage,
+    state
   } = useTable({
     columns,
-    data
-  }, useSortBy)
+    data,
+    initialState: { pageIndex: 0, pageSize: 50 }, // Pass our hoisted table state
+    manualPagination: true, // Tell the usePagination
+    // hook that we'll handle our own data fetching
+    // This means we'll also have to provide our own
+    // pageCount.
+    pageCount: controlledPageCount
+  }, useSortBy, usePagination);
 
-  const handleChangePage = (event, newPage) => {
-    console.log("now page", newPage);
-    // gotoPage(newPage);
-  }
+  const pageIndex = state[0].pageIndex;
 
   const classes = useToolbarStyles();
+
+  const downloadExcel = useCallback(() => {
+    const textData = data.map(d => {
+      return columns.map(col => col.getText(d))
+    });
+    const header = columns.map(col => col.Header);
+    const worksheet = XLSX.utils.aoa_to_sheet([header, ...textData]);
+    const newWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(newWorkbook, worksheet, 'SheetJS');
+    XLSX.writeFile(newWorkbook, `GM_TABLE_${title}_EXPORT.xlsx`);
+  }, [data, columns]);
+
+
+  React.useEffect(() => {
+    console.log(pageIndex);
+    fetchData({ pageIndex });
+  }, [fetchData, pageIndex]);
   // Render the UI for your table
   return (
     <div>
       <Toolbar className={classes.root}>
         <Typography variant="h6" className={classes.title}>
-          Class/Event
+          { title }
         </Typography>
-        <Tooltip title="Search">
+        {/* TODO: Later */}
+        {/* <Tooltip title="Search">
           <IconButton aria-label="Search">
             <SearchIcon />
           </IconButton>
@@ -66,9 +94,9 @@ function Table({ columns, data, loading, fetchData }) {
           <IconButton aria-label="Filter">
             <FilterListIcon />
           </IconButton>
-        </Tooltip>
-        <Tooltip title="Download">
-          <IconButton aria-label="Download">
+        </Tooltip> */}
+        <Tooltip title="Download Excel">
+          <IconButton aria-label="Download Excel" onClick={downloadExcel}>
             <GetAppIcon />
           </IconButton>
         </Tooltip>
@@ -82,7 +110,6 @@ function Table({ columns, data, loading, fetchData }) {
                   <TableSortLabel
                     active={column.isSorted}
                     direction={column.isSortedDesc ? 'desc' : 'asc'}
-                    onClick={(e) => console.log(e)}
                   >
                     {column.render('Header')}
                   </TableSortLabel>
@@ -92,7 +119,7 @@ function Table({ columns, data, loading, fetchData }) {
           ))}
         </TableHead>
         <TableBody>
-          {rows.map(
+          {page.map(
             (row, i) => {
               prepareRow(row);
               return (
@@ -105,11 +132,19 @@ function Table({ columns, data, loading, fetchData }) {
                     )
                   })}
                 </TableRow>
-              )
-            }
+              )}
           )}
         </TableBody>
       </MaUTable>
+      { loading ? 'Loading...': ''}
+      <div>
+        <IconButton onClick={() => previousPage()} disabled={!canPreviousPage}>
+          prev
+        </IconButton>
+        <IconButton onClick={() => nextPage()} disabled={!canNextPage}>
+          next
+        </IconButton>
+      </div>
     </div>
   )
 }
@@ -120,37 +155,60 @@ function App() {
       {
         Header: 'First Name',
         accessor: 'firstName',
+        getText: d => d.firstName
       },
       {
         Header: 'Last Name',
         accessor: 'lastName',
+        getText: d => d.lastName
       },
       {
         Header: 'Age',
         accessor: 'age',
+        getText: d => d.age
       },
       {
         Header: 'Visits',
         accessor: 'visits',
+        getText: d => d.visits
       },
       {
         Header: 'Status',
         accessor: 'status',
+        getText: d => d.status
       },
       {
         Header: 'Profile Progress',
         accessor: 'progress',
+        getText: d => d.progress
       },
     ],
     []
   )
-
-  const data = React.useMemo(() => makeData(20), [])
-
+  
+  const [data, setData ] = useState([]);
+  const [cachedData, setCachedData] = useState(new Map());
+  const [ count, setCount ] = useState(0);
+  const [ pageCount, setPageCount ] = useState(50);
+  const [ loading, setLoading ] = useState(false);
+  const fetchData = useCallback(({ pageIndex }) => {
+    if(cachedData.has(pageIndex)){ 
+      setData(cachedData.get(pageIndex));
+    } else {
+      setLoading(true);
+      setTimeout(() => {
+        const makeupData = makeData(Math.random()*10);
+        setData(makeupData);
+        setCachedData(cachedData.set(pageIndex, makeupData));
+        setCount(count + 1);
+        setLoading(false);
+      }, 1500);
+    }
+  }, []);
   return (
     <div>
       <CssBaseline />
-      <Table columns={columns} data={data} />
+      <Table columns={columns} data={data} title={'Class/Event'} fetchData={fetchData} loading={loading} controlledPageCount={pageCount}/>
     </div>
   )
 }

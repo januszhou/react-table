@@ -8,11 +8,16 @@
   },
   "dependencies": {
     "@material-ui/core": "^4.4.3",
+    "@material-ui/icons": "^4.5.1",
     "namor": "^1.1.2",
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
+    "react-infinite-scroll-component": "^5.0.3",
     "react-scripts": "3.0.1",
-    "react-table": "next"
+    "react-table": "next",
+    "react-window": "^1.8.5",
+    "react-window-infinite-loader": "^1.0.5",
+    "xlsx": "^0.15.2"
   },
   "devDependencies": {
     "@rescripts/cli": "^0.0.11",
