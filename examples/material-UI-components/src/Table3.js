@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 
 import CssBaseline from '@material-ui/core/CssBaseline';
 import { makeStyles } from '@material-ui/core/styles';
@@ -19,6 +19,9 @@ import Typography from '@material-ui/core/Typography';
 import Input from '@material-ui/core/Input';
 import Menu from '@material-ui/core/Menu';
 import MenuItem from '@material-ui/core/MenuItem';
+import Checkbox from '@material-ui/core/Checkbox';
+import ListItemText from '@material-ui/core/ListItemText';
+import ListItem from '@material-ui/core/ListItem';
 import XLSX from 'xlsx';
 
 import { useTable, useSortBy, usePagination } from 'react-table';
@@ -63,52 +66,67 @@ const useDownload = ({ download, data, columns, title }) => {
   return { downloadButton };
 }
 
-const useFilterColumn = ({ columns }) => {
-  const [ filteredColumn, setFilteredColumn ] = useState(columns);
+const ITEM_HEIGHT = 48;
+
+const useColumnFilter = ({ columns }) => {
+  const anchorRef = useRef(null);
+  const [ filtered, setFiltered ] = useState(columns);
+  useEffect(() => {
+    setFiltered(filtered.map(c => { c.show = true; return c; }));
+  }, [])
   const [ open, setOpen ] = useState(false);
-  const onChange = (event) => {
-    const checked = event.target.checked;
-    const name = event.target.value;
-    const columnIndex = columns.indexOf(c => c.Header === name);
-    const column = filteredColumn[columnIndex];
-    
+  const onChange = name => () => {
+    const columnIndex = filtered.findIndex(c => c.Header === name);
+    const column = filtered[columnIndex];
+    column.show = !column.show;
+    setFiltered([...filtered.slice(0, columnIndex), column, ...filtered.slice(columnIndex + 1)]);
   }
 
-  // const MenuProps = {
-  //   PaperProps: {
-  //     style: {
-  //       maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP,
-  //       width: 250,
-  //     },
-  //   },
-  // };
+  const PaperProps = {
+    style: {
+      maxHeight: ITEM_HEIGHT * 4.5,
+      width: 200,
+    },
+  };
 
   const onClick = () => setOpen(!open);
+
+  const shouldDisabled = (name) => {
+    const left = filtered.filter(c => c.show === true);
+    if(left.length === 1 && left[0].Header === name){
+      return true;
+    } else {
+      return false;
+    }
+  }
 
   const filterButton = useMemo(() => {
     return (
       <>
-        <Tooltip title="Filter Column">
-          <IconButton aria-label="Filter Column" onClick={onClick}>
+        <Tooltip title="Filter Column" ref={anchorRef}>
+          <IconButton aria-label="Filter Column" onClick={onClick} >
             <FilterListIcon />
           </IconButton>
         </Tooltip>
-        <Menu open={open}>
-          {filteredColumn.map((column) => (
-            <MenuItem key={column.Header} value={column.Header}>
-              <Checkbox checked={column.show !== false} onChange={onChange} value={column.Header}/>
+        <Menu open={open} anchorEl={anchorRef.current} keepMounted={true} onClose={() => setOpen(false)} PaperProps={PaperProps}>
+          {filtered.map((column) => (
+            <ListItem key={column.Header} role={undefined} dense button onClick={onChange(column.Header)} disabled={shouldDisabled(column.Header)}>
+              <Checkbox checked={column.show !== false} />
               <ListItemText primary={column.Header} />
-            </MenuItem>
+            </ListItem>
           ))}
         </Menu>
       </>
     )
-  })
+  });
+
+  return { filterButton, filtered };
 }
 
 export const MaterialTable = (props) => {
-  const { columns, data, rowsPerPage = 5, title, dense = true, download = true } = props;
-
+  const { columns: allColumns, data, rowsPerPage = 5, title, dense = true, download = true, columnFilter = true } = props;
+  const [ columns, setColumns ] = useState(allColumns);
+  console.log(columns);
   const classes = useToolbarStyles()
 
   const {
@@ -135,6 +153,12 @@ export const MaterialTable = (props) => {
 
   
   const { downloadButton } = useDownload({ data, columns, title });
+
+  const { filterButton, filtered: filteredColumn } = useColumnFilter({ columns });
+
+  useEffect(() => {
+    setColumns(filteredColumn);
+  }, [filteredColumn, setColumns])
   
   return (
     <>
@@ -142,6 +166,7 @@ export const MaterialTable = (props) => {
         <Typography variant="h6" className={classes.title}>
           {title}
         </Typography>
+        { columnFilter && filterButton}
         { download && downloadButton }
       </Toolbar>
       <MaUTable {...getTableProps()} stickyHeader={true} size={dense ? 'small' : 'medium'}>
