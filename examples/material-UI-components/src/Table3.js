@@ -69,12 +69,11 @@ const useDownload = ({ download, data, columns, title }) => {
 const ITEM_HEIGHT = 48;
 
 const useColumnFilter = ({ columns }) => {
-  const anchorRef = useRef(null);
+  const [anchorEl, setAnchorEl] = useState(null);
   const [ filtered, setFiltered ] = useState(columns);
   useEffect(() => {
     setFiltered(filtered.map(c => { c.show = true; return c; }));
   }, [])
-  const [ open, setOpen ] = useState(false);
   const onChange = name => () => {
     const columnIndex = filtered.findIndex(c => c.Header === name);
     const column = filtered[columnIndex];
@@ -89,7 +88,13 @@ const useColumnFilter = ({ columns }) => {
     },
   };
 
-  const onClick = () => setOpen(!open);
+  const onClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  }
+
+  const onClose = () => {
+    setAnchorEl(null);
+  }
 
   const shouldDisabled = (name) => {
     const left = filtered.filter(c => c.show === true);
@@ -103,12 +108,12 @@ const useColumnFilter = ({ columns }) => {
   const filterButton = useMemo(() => {
     return (
       <>
-        <Tooltip title="Filter Column" ref={anchorRef}>
+        <Tooltip title="Filter Column">
           <IconButton aria-label="Filter Column" onClick={onClick} >
             <FilterListIcon />
           </IconButton>
         </Tooltip>
-        <Menu open={open} anchorEl={anchorRef.current} keepMounted={true} onClose={() => setOpen(false)} PaperProps={PaperProps}>
+        <Menu open={Boolean(anchorEl)} anchorEl={anchorEl} keepMounted={true} onClose={onClose} PaperProps={PaperProps}>
           {filtered.map((column) => (
             <ListItem key={column.Header} role={undefined} dense button onClick={onChange(column.Header)} disabled={shouldDisabled(column.Header)}>
               <Checkbox checked={column.show !== false} />
