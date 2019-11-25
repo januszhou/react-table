@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 
 import CssBaseline from '@material-ui/core/CssBaseline';
 import { makeStyles } from '@material-ui/core/styles';
@@ -16,6 +16,9 @@ import Tooltip from '@material-ui/core/Tooltip';
 import Toolbar from '@material-ui/core/Toolbar';
 import IconButton from '@material-ui/core/IconButton';
 import Typography from '@material-ui/core/Typography';
+import Input from '@material-ui/core/Input';
+import Menu from '@material-ui/core/Menu';
+import MenuItem from '@material-ui/core/MenuItem';
 import XLSX from 'xlsx';
 
 import { useTable, useSortBy, usePagination } from 'react-table';
@@ -24,7 +27,7 @@ import makeData from './makeData';
 
 const useToolbarStyles = makeStyles(theme => ({
   root: {
-    paddingLeft: theme.spacing(2),
+    paddingLeft: theme.spacing(1),
     paddingRight: theme.spacing(1),
   },
   title: {
@@ -32,19 +35,79 @@ const useToolbarStyles = makeStyles(theme => ({
   },
 }));
 
-const downloadExcel = (data, columns) => {
-  const textData = data.map(d => {
-    return columns.map(col => col.getText(d))
-  });
-  const header = columns.map(col => col.Header);
-  const worksheet = XLSX.utils.aoa_to_sheet([header, ...textData]);
-  const newWorkbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(newWorkbook, worksheet, 'SheetJS');
-  XLSX.writeFile(newWorkbook, `EXPORT.xlsx`);
-};
+
+
+const useDownload = ({ download, data, columns, title }) => {
+  const onClick = useCallback(() => {
+    const textData = data.map(d => {
+      return columns.map(c => {
+        const getText = c.getText || c.accessor;
+        return getText(d);
+      });
+    });
+    const header = columns.map(col => col.Header);
+    const worksheet = XLSX.utils.aoa_to_sheet([header, ...textData]);
+    const newWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(newWorkbook, worksheet, 'SheetJS');
+    XLSX.writeFile(newWorkbook, `${title}_EXPORT.xlsx`);
+  }, [ data, columns, title ])
+
+  const downloadButton = useMemo(() => (
+    <Tooltip title="Download Excel">
+      <IconButton aria-label="Download Excel" onClick={onClick}>
+        <GetAppIcon />
+      </IconButton>
+    </Tooltip>
+  ), [ onClick ]);
+
+  return { downloadButton };
+}
+
+const useFilterColumn = ({ columns }) => {
+  const [ filteredColumn, setFilteredColumn ] = useState(columns);
+  const [ open, setOpen ] = useState(false);
+  const onChange = (event) => {
+    const checked = event.target.checked;
+    const name = event.target.value;
+    const columnIndex = columns.indexOf(c => c.Header === name);
+    const column = filteredColumn[columnIndex];
+    
+  }
+
+  // const MenuProps = {
+  //   PaperProps: {
+  //     style: {
+  //       maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP,
+  //       width: 250,
+  //     },
+  //   },
+  // };
+
+  const onClick = () => setOpen(!open);
+
+  const filterButton = useMemo(() => {
+    return (
+      <>
+        <Tooltip title="Filter Column">
+          <IconButton aria-label="Filter Column" onClick={onClick}>
+            <FilterListIcon />
+          </IconButton>
+        </Tooltip>
+        <Menu open={open}>
+          {filteredColumn.map((column) => (
+            <MenuItem key={column.Header} value={column.Header}>
+              <Checkbox checked={column.show !== false} onChange={onChange} value={column.Header}/>
+              <ListItemText primary={column.Header} />
+            </MenuItem>
+          ))}
+        </Menu>
+      </>
+    )
+  })
+}
 
 export const MaterialTable = (props) => {
-  const { columns, data, rowsPerPage = 5, title, dense = true } = props;
+  const { columns, data, rowsPerPage = 5, title, dense = true, download = true } = props;
 
   const classes = useToolbarStyles()
 
@@ -68,29 +131,18 @@ export const MaterialTable = (props) => {
   
   useEffect(() => {
     setPageSize(rowsPerPage);
-  }, [])
+  }, [rowsPerPage, setPageSize]);
+
+  
+  const { downloadButton } = useDownload({ data, columns, title });
+  
   return (
-    <div>
+    <>
       <Toolbar className={classes.root}>
         <Typography variant="h6" className={classes.title}>
           {title}
         </Typography>
-        {/* TODO: Later */}
-        {/* <Tooltip title="Search">
-          <IconButton aria-label="Search">
-            <SearchIcon />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Filter">
-          <IconButton aria-label="Filter">
-            <FilterListIcon />
-          </IconButton>
-        </Tooltip> */}
-        <Tooltip title="Download Excel">
-          <IconButton aria-label="Download Excel" onClick={() => downloadExcel(data, columns)}>
-            <GetAppIcon />
-          </IconButton>
-        </Tooltip>
+        { download && downloadButton }
       </Toolbar>
       <MaUTable {...getTableProps()} stickyHeader={true} size={dense ? 'small' : 'medium'}>
         <TableHead>
@@ -145,9 +197,9 @@ export const MaterialTable = (props) => {
         nextIconButtonProps={{
           'aria-label': 'next page',
         }}
-        onChangePage={(event, currPage) => { console.log(currPage); gotoPage(currPage); }}
+        onChangePage={(event, currPage) => { gotoPage(currPage); }}
       />
-    </div>
+    </>
   )
 }
 
@@ -192,7 +244,7 @@ function App() {
   return (
     <div>
       <CssBaseline />
-      <MaterialTable columns={columns} data={data} title={'Class/Event'} />
+      <MaterialTable columns={columns} data={data} title={'Class/Event'} download={true}/>
     </div>
   )
 }
