@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 
 import CssBaseline from '@material-ui/core/CssBaseline';
 import { makeStyles, lighten } from '@material-ui/core/styles';
@@ -128,9 +128,9 @@ const useColumnFilter = ({ columns }) => {
   return { filterButton, filtered };
 }
 
-const useSelect = ({ data, getRowId }) => {
+const useSelect = ({ data: rawData, getRowId, isRowSelectable = () => true }) => {
   const [ selected, setSelected ] = useState([]);
-  
+  const data = rawData.filter(d => isRowSelectable(d));
   const onSelectAllClick = (event) => {
     if (event.target.checked) {
       setSelected(data);
@@ -160,11 +160,13 @@ const useSelect = ({ data, getRowId }) => {
       <TableCell padding="checkbox">
         <Checkbox
           checked={isRowSelected(row)}
+          disabled={!isRowSelectable(row)}
         />
       </TableCell>
     )
   })
   const onRowClick = row => {
+    if(!isRowSelectable(row)) return;
     const selectedIndex = selected.findIndex(s => getRowId(s) === getRowId(row));
     let newSelected = [];
     if (selectedIndex === -1) {
@@ -191,7 +193,7 @@ const useSelect = ({ data, getRowId }) => {
 export const MaterialTable = (props) => {
   const { columns: allColumns, data, rowsPerPage = 5, title, dense = true, download = true, columnFilter = true, selectable = false, selectOption = {} } = props;
   const [ columns, setColumns ] = useState(allColumns);
-  const { makeToolbar, getRowId } = selectOption;
+  const { makeToolbar, getRowId, isRowSelectable } = selectOption;
 
   if(selectable && (!makeToolbar || !getRowId)){
     console.warn("selectOption must be provided if table is selectable");
@@ -226,7 +228,7 @@ export const MaterialTable = (props) => {
 
   const { filterButton, filtered: filteredColumn } = useColumnFilter({ columns });
 
-  const { headerCell, onRowClick, rowCell, selectedRow, resetSelectedRow, isRowSelected } = useSelect({ data, getRowId });
+  const { headerCell, onRowClick, rowCell, selectedRow, resetSelectedRow, isRowSelected } = useSelect({ data, getRowId, isRowSelectable });
 
   useEffect(() => {
     setColumns(filteredColumn);
@@ -377,7 +379,8 @@ function App() {
 
   const selectOption = {
     makeToolbar,
-    getRowId: r => `${r.firstName} ${r.lastName}`
+    getRowId: r => `${r.firstName} ${r.lastName}`,
+    isRowSelectable: row => row.age > 7
   }
   return (
     <div>
