@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 
 import CssBaseline from '@material-ui/core/CssBaseline';
-import { makeStyles } from '@material-ui/core/styles';
+import { makeStyles, lighten } from '@material-ui/core/styles';
 import MaUTable from '@material-ui/core/Table'
 import TableBody from '@material-ui/core/TableBody'
 import TableCell from '@material-ui/core/TableCell'
@@ -10,6 +10,7 @@ import TableSortLabel from '@material-ui/core/TableSortLabel'
 import TableRow from '@material-ui/core/TableRow'
 import TablePagination from '@material-ui/core/TablePagination';
 import GetAppIcon from '@material-ui/icons/GetApp';
+import DeleteIcon from '@material-ui/icons/Delete';
 import SearchIcon from '@material-ui/icons/Search';
 import FilterListIcon from '@material-ui/icons/FilterList';
 import Tooltip from '@material-ui/core/Tooltip';
@@ -40,7 +41,7 @@ const useToolbarStyles = makeStyles(theme => ({
 
 
 
-const useDownload = ({ download, data, columns, title }) => {
+const useDownload = ({ data, columns, title }) => {
   const onClick = useCallback(() => {
     const textData = data.map(d => {
       return columns.map(c => {
@@ -66,13 +67,12 @@ const useDownload = ({ download, data, columns, title }) => {
   return { downloadButton };
 }
 
-const ITEM_HEIGHT = 48;
-
 const useColumnFilter = ({ columns }) => {
+  const ITEM_HEIGHT = 48;
   const [anchorEl, setAnchorEl] = useState(null);
   const [ filtered, setFiltered ] = useState(columns);
   useEffect(() => {
-    setFiltered(filtered.map(c => { c.show = true; return c; }));
+    setFiltered(filtered => filtered.map(c => { c.show = true; return c; }));
   }, [])
   const onChange = name => () => {
     const columnIndex = filtered.findIndex(c => c.Header === name);
@@ -128,10 +128,75 @@ const useColumnFilter = ({ columns }) => {
   return { filterButton, filtered };
 }
 
+const useSelect = ({ data, getRowId }) => {
+  const [ selected, setSelected ] = useState([]);
+  
+  const onSelectAllClick = (event) => {
+    if (event.target.checked) {
+      setSelected(data);
+      return;
+    }
+    setSelected([]);
+  }
+  const headerCell = useMemo(() => {
+    return (
+      <TableCell padding="checkbox">
+        <Checkbox
+          indeterminate={selected.length > 0 && selected.length < data.length}
+          checked={selected.length === data.length}
+          onChange={onSelectAllClick}
+          inputProps={{ 'aria-label': 'select all desserts' }}
+        />
+      </TableCell>
+    )
+  });
+  
+  const isRowSelected = row => {
+    return selected.findIndex(s => getRowId(s) === getRowId(row)) !== -1
+  }
+
+  const rowCell = useCallback((row) => {
+    return (
+      <TableCell padding="checkbox">
+        <Checkbox
+          checked={isRowSelected(row)}
+        />
+      </TableCell>
+    )
+  })
+  const onRowClick = row => {
+    const selectedIndex = selected.findIndex(s => getRowId(s) === getRowId(row));
+    let newSelected = [];
+    if (selectedIndex === -1) {
+      newSelected = newSelected.concat(selected, row);
+    } else if (selectedIndex === 0) {
+      newSelected = newSelected.concat(selected.slice(1));
+    } else if (selectedIndex === selected.length - 1) {
+      newSelected = newSelected.concat(selected.slice(0, -1));
+    } else if (selectedIndex > 0) {
+      newSelected = newSelected.concat(
+        selected.slice(0, selectedIndex),
+        selected.slice(selectedIndex + 1),
+      );
+    }
+    setSelected(newSelected);
+  }
+
+  // usually used after an action is processed
+  const reset = () => { setSelected([]) };
+
+  return { headerCell, rowCell, onRowClick, selectedRow: selected, resetSelectedRow: reset, isRowSelected };
+}
+
 export const MaterialTable = (props) => {
-  const { columns: allColumns, data, rowsPerPage = 5, title, dense = true, download = true, columnFilter = true } = props;
+  const { columns: allColumns, data, rowsPerPage = 5, title, dense = true, download = true, columnFilter = true, selectable = false, selectOption = {} } = props;
   const [ columns, setColumns ] = useState(allColumns);
-  console.log(columns);
+  const { makeToolbar, getRowId } = selectOption;
+
+  if(selectable && (!makeToolbar || !getRowId)){
+    console.warn("selectOption must be provided if table is selectable");
+  }
+  
   const classes = useToolbarStyles()
 
   const {
@@ -161,23 +226,27 @@ export const MaterialTable = (props) => {
 
   const { filterButton, filtered: filteredColumn } = useColumnFilter({ columns });
 
+  const { headerCell, onRowClick, rowCell, selectedRow, resetSelectedRow, isRowSelected } = useSelect({ data, getRowId });
+
   useEffect(() => {
     setColumns(filteredColumn);
   }, [filteredColumn, setColumns])
   
+  const toolbar = (selectable && selectedRow.length > 0) ? makeToolbar({ selectedRow, resetSelectedRow }) : (<Toolbar className={classes.root}>
+    <Typography variant="h6" className={classes.title}>
+      {title}
+    </Typography>
+    { columnFilter && filterButton}
+    { download && downloadButton }
+  </Toolbar>)
   return (
     <>
-      <Toolbar className={classes.root}>
-        <Typography variant="h6" className={classes.title}>
-          {title}
-        </Typography>
-        { columnFilter && filterButton}
-        { download && downloadButton }
-      </Toolbar>
+      { toolbar }
       <MaUTable {...getTableProps()} stickyHeader={true} size={dense ? 'small' : 'medium'}>
         <TableHead>
           {headerGroups.map(headerGroup => (
             <TableRow {...headerGroup.getHeaderGroupProps()}>
+              { selectable && headerCell }
               {headerGroup.headers.map(column => (
                 <TableCell {...column.getHeaderProps(column.getSortByToggleProps())}>
                   <TableSortLabel
@@ -196,7 +265,8 @@ export const MaterialTable = (props) => {
             (row) => {
               prepareRow(row);
               return (
-                <TableRow {...row.getRowProps()}>
+                <TableRow {...row.getRowProps()} selected={isRowSelected(row.original)} hover={true} onClick={selectable ? () => onRowClick(row.original) : () => {} }>
+                  { selectable && rowCell(row.original)}
                   {row.cells.map(cell => {
                     return (
                       <TableCell {...cell.getCellProps()}>
@@ -210,7 +280,7 @@ export const MaterialTable = (props) => {
           )}
           {emptyRows > 0 && (
             <TableRow style={{ height: (dense ? 33 : 53) * emptyRows }}>
-              <TableCell colSpan={columns.length} />
+              <TableCell colSpan={selectable ? columns.length + 1 : columns.length} />
             </TableRow>
           )}
         </TableBody>
@@ -270,11 +340,50 @@ function App() {
     []
   )
   
-  const data = React.useMemo(() => makeData(91), [])
+  const data = React.useMemo(() => makeData(91), []);
+
+  const useSelectToolbarStyles = makeStyles(theme => ({
+    root: {
+      paddingLeft: theme.spacing(1),
+      paddingRight: theme.spacing(1),
+      color: theme.palette.secondary.main,
+      backgroundColor: lighten(theme.palette.secondary.light, 0.85),
+    },
+    title: {
+      flex: '1 1 100%',
+    },
+  }));
+
+  const classes = useSelectToolbarStyles();
+  const makeToolbar = ({ selectedRow, resetSelectedRow }) => {
+    return (<Toolbar
+      className={classes.root}
+    >
+      <Typography className={classes.title} color="inherit" variant="subtitle1">
+        {selectedRow.length} selected
+      </Typography>
+      <Tooltip title="Delete">
+        <IconButton aria-label="delete" onClick={() => console.log(selectedRow)}>
+          <DeleteIcon />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Reset">
+        <IconButton aria-label="Reset" onClick={resetSelectedRow}>
+          <DeleteIcon />
+        </IconButton>
+      </Tooltip>
+    </Toolbar>)
+  }
+
+  const selectOption = {
+    makeToolbar,
+    getRowId: r => `${r.firstName} ${r.lastName}`
+  }
   return (
     <div>
       <CssBaseline />
-      <MaterialTable columns={columns} data={data} title={'Class/Event'} download={true}/>
+      <MaterialTable columns={columns} data={data} title={'Class/Event'} download={true} selectable={true} selectOption={selectOption}/>
+      <MaterialTable columns={columns} data={data} title={'Class/Event'} />
     </div>
   )
 }
