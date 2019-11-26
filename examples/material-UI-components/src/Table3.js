@@ -39,8 +39,6 @@ const useToolbarStyles = makeStyles(theme => ({
   },
 }));
 
-
-
 const useDownload = ({ data, columns, title }) => {
   const onClick = useCallback(() => {
     const textData = data.map(d => {
@@ -245,7 +243,7 @@ export const MaterialTable = (props) => {
     <>
       { toolbar }
       <MaUTable {...getTableProps()} stickyHeader={true} size={dense ? 'small' : 'medium'}>
-        <TableHead>
+        <TableHead style={{bold: true}}>
           {headerGroups.map(headerGroup => (
             <TableRow {...headerGroup.getHeaderGroupProps()}>
               { selectable && headerCell }
@@ -342,7 +340,7 @@ function App() {
     []
   )
   
-  const data = React.useMemo(() => makeData(91), []);
+  const data = React.useMemo(() => makeData(2000), []);
 
   const useSelectToolbarStyles = makeStyles(theme => ({
     root: {
@@ -385,7 +383,7 @@ function App() {
   return (
     <div>
       <CssBaseline />
-      <MaterialTable columns={columns} data={data} title={'Class/Event'} download={true} selectable={true} selectOption={selectOption}/>
+      <MaterialTable columns={columns} data={data} title={'Class/Event'} rowsPerPage={50} download={true} selectable={true} selectOption={selectOption}/>
       <MaterialTable columns={columns} data={data} title={'Class/Event'} />
     </div>
   )
